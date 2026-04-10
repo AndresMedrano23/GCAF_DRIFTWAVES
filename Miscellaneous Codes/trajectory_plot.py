@@ -1,0 +1,183 @@
+def read_log(file, kwargs):
+    """ read data file from gcafpp """
+    import configparser
+    config = configparser.ConfigParser()
+    config.read(file)
+    dum= config.get('field','minor_radius').split()
+    kwargs['rmin']= float(dum[0])
+    dum= config.get('field','major_radius').split()
+    kwargs['rmaj']= float(dum[0])
+    dum= config.get('particle','pitch_angle').split()
+    kwargs['ptch']= dum[1]
+
+# log data dictionary
+log_data= {
+    'rmin': 11,
+    'rmaj': 111,
+    'ptch': 1.1
+    }
+
+# argument parsing
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('-i','--input-file',nargs='+',
+    help='input file',required=True)
+parser.add_argument('-t','--type',
+	help='plot type \'xvst\', \'rvsz\', or \'3d\'',required=True)
+parser.add_argument('-l','--log-file',nargs='+',
+	help='log file info')
+parser.add_argument('-o','--output-file',
+	help='output file')
+parser.add_argument('-s','--show-plot',action="store_true",
+	help='show_plot')
+args = parser.parse_args()
+print("trajectory plot...")
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.pylab as pylab
+from mpl_toolkits.mplot3d import Axes3D  
+#plt.style.use('seaborn-whitegrid')
+params = {'legend.fontsize': 'large',
+         'axes.labelsize': 'x-large',
+         'xtick.labelsize':'x-large',
+         'ytick.labelsize':'x-large'}
+pylab.rcParams.update(params)
+# read trajectory data
+tim=[]
+rad=[]
+tht=[]
+nt =[]
+zet=[]
+nz =[]
+eng=[]
+pch=[]
+x=[]
+y=[]
+z=[]
+f= open(args.input_file[0],'r')
+first_line= f.readline()
+for line in f:
+      L= line.split()
+      tim.append(float(L[0]))
+      rad.append(float(L[1]))
+      tht.append(float(L[2]))
+      nt.append(float(L[3]))
+      zet.append(float(L[4]))
+      nt.append(float(L[5]))
+      eng.append(float(L[6]))
+      pch.append(float(L[7]))
+      x.append(float(L[8]))
+      y.append(float(L[9]))
+      z.append(float(L[10]))
+f.close()
+
+
+if args.type=='xvst': # plot x vs t
+	tim_scaled= [a*1000 for a in tim]
+
+	fig, ax= plt.subplots(5,sharex=True,figsize=(6,8))
+	for i in range(5):
+		#ax[i].yaxis.set_major_locator(plt.MaxNLocator(3))
+		ax[i].set(xlim=(min(tim_scaled),max(tim_scaled)))
+	ax[0].plot(tim_scaled,rad)
+	ax[0].set(ylabel='$r/a$',ylim=(0.0,1.0))
+	ax[1].plot(tim_scaled,tht)
+	ax[1].set(ylabel='$\\theta$',ylim=(-np.pi,np.pi))
+	ax[2].plot(tim_scaled,zet)
+	ax[2].set(ylabel='$\zeta$',ylim=(0.0,2*np.pi))
+	ax[3].plot(tim_scaled,eng)
+	ax[3].set(ylabel='$E(keV)$')
+	ax[4].plot(tim_scaled,pch)
+	ax[4].xaxis.set_major_locator(plt.MaxNLocator(5))
+	ax[4].set(xlabel='$t(ms)$',ylabel='$\lambda$',ylim=(-1.1,1.1))
+	plt.tight_layout()
+	fig.subplots_adjust(hspace=0.1)
+
+elif args.type=='rvsz': # plot R vs Z
+        R_cyl=[]
+        for i in range(len(x)):
+            R_cyl.append(np.sqrt(x[i]**2 +y[i]**2))
+        Z_cyl= [a for a in z]
+
+        if args.log_file: # if cfg file plot wall and mid rad
+            read_log(args.log_file,log_data)
+            fig, ax= plt.subplots(figsize=(6,6))
+            tht_dum= np.arange(0.0,2*np.pi,.01)
+            rw= [log_data['rmaj'] \
+                +log_data['rmin']*np.sin(a) for a in tht_dum]
+            zw= [log_data['rmin']*np.cos(a) for a in tht_dum]
+            rm= [log_data['rmaj'] \
+                +0.5*log_data['rmin']*np.sin(a) for a in tht_dum]
+            zm= [0.5*log_data['rmin']*np.cos(a) for a in tht_dum]
+            ax.scatter(R_cyl,Z_cyl,label="$\lambda=$ "+log_data['ptch'])
+            ax.plot(rw,zw,c='k',lw=2)
+            ax.plot(rm,zm,c='k',ls='--',lw=2)
+            plt.legend(framealpha=1,frameon=True)
+        else:
+            fig, ax= plt.subplots(figsize=(6,6))
+        ax.scatter(R_cyl[1:],Z_cyl[1:],s=5)
+        ax.set_xlabel('$R(cm)$')
+        ax.set_ylabel('$Z(cm)$')
+        #plt.xlim(70,210)
+        #plt.ylim(-30,30)
+        plt.title(f"$r/a=${rad[1]:.2f}  ")
+        #plt.title(f"$\lambda=${pch[0]:.2f}  $\\alpha=${np.acos(pch[0])*(180/np.pi):.2f}")
+        plt.tight_layout()
+
+elif args.type=='3dCil':  # 3D plot of R, Z, theta
+        R_cyl=[np.sqrt(x[i]**2 +y[i]**2) for i in range(len(x))]
+        fig = plt.figure(figsize=(8,6))
+        ax = fig.add_subplot(111, projection='3d')
+        #ax.scatter(R_cyl, zet, z , s=5)
+        ax.plot(R_cyl, zet, z, lw=1)
+        ax.set_xlabel('$R(cm)$')
+        ax.set_zlabel('$Z(cm)$')
+        ax.set_ylabel('$\zeta$')
+        plt.title('3D Trajectory: R, Z, Theta')
+        plt.tight_layout()
+
+elif args.type=='3dline':  # 3D plot of R, Z, theta
+        fig = plt.figure(figsize=(8,6))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot(x, y, z, lw=1)
+        #ax.scatter(x, y, z, s=5)
+        ax.plot(x, y, z, lw=1)
+        ax.set_xlabel('$x$')
+        ax.set_zlabel('$y$')
+        ax.set_ylabel('$z$')
+        plt.title('3D Trajectory: x, y, z')
+        plt.tight_layout()
+
+elif args.type=='3d':  # 3D plot of R, Z, theta
+        fig = plt.figure(figsize=(8,6))
+        ax = fig.add_subplot(111, projection='3d')
+        #ax.plot(x, y, z, lw=1)
+        ax.scatter(x[1:], y[1:], z[1:], s=5)
+        ax.set_xlabel('$x$')
+        ax.set_zlabel('$y$')
+        ax.set_ylabel('$z$')
+        #plt.title('3D Trajectory: x, y, z')
+        plt.tight_layout()
+
+
+elif args.type=='3dtor':  # 3D plot of r/a, zeta, theta
+    for k in range(len(args.input_file)):
+        fig = plt.figure(figsize=(8,6))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(rad, zet, tht, s=5)
+        ax.set_xlabel('$r/a$')
+        ax.set_ylabel('$\\zeta$')
+        ax.set_zlabel('$\\theta$')
+        plt.title('3D Trajectory: r/a, zeta, theta')
+        plt.tight_layout()
+
+else:
+    print("Incorrect plot type: "+args.type)
+
+# output
+if args.output_file:
+    plt.savefig(args.output_file)
+if args.show_plot:
+    plt.show()
